@@ -1,11 +1,23 @@
+locals {
+  kubeconfig_parsed = yamldecode(data.external.kubeconfig_raw.result.content)
+  kube_cluster      = local.kubeconfig_parsed.clusters[0].cluster
+  kube_user         = local.kubeconfig_parsed.users[0].user
+}
+
 provider "helm" {
   kubernetes = {
-    config_path = local_file.kubeconfig.filename
+    host                   = local.kube_cluster.server
+    cluster_ca_certificate = base64decode(local.kube_cluster["certificate-authority-data"])
+    client_certificate     = base64decode(local.kube_user["client-certificate-data"])
+    client_key             = base64decode(local.kube_user["client-key-data"])
   }
 }
 
 provider "kubernetes" {
-  config_path = local_file.kubeconfig.filename
+  host                   = local.kube_cluster.server
+  cluster_ca_certificate = base64decode(local.kube_cluster["certificate-authority-data"])
+  client_certificate     = base64decode(local.kube_user["client-certificate-data"])
+  client_key             = base64decode(local.kube_user["client-key-data"])
 }
 
 resource "helm_release" "argocd" {
@@ -29,7 +41,11 @@ data "kubernetes_secret_v1" "argocd_admin_password" {
 }
 
 provider "kubectl" {
-  config_path = local_file.kubeconfig.filename
+  host                   = local.kube_cluster.server
+  cluster_ca_certificate = base64decode(local.kube_cluster["certificate-authority-data"])
+  client_certificate     = base64decode(local.kube_user["client-certificate-data"])
+  client_key             = base64decode(local.kube_user["client-key-data"])
+  load_config_file       = false
 }
 
 resource "kubectl_manifest" "bootstrap_app" {
