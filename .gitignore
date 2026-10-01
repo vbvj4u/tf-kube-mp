@@ -1,2 +1,9 @@
 .worktrees/
 .superpowers/
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform/kubeconfig
+terraform/cloud-init-server.yaml
+terraform/cloud-init-worker-*.yaml
+crash.log
