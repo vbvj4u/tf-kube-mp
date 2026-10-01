@@ -5,9 +5,10 @@ resource "local_file" "cloud_init_server" {
   })
 }
 
-resource "local_file" "cloud_init_worker" {
-  count    = var.workers
-  filename = "${path.module}/cloud-init-worker-${count.index}.yaml"
+resource "local_sensitive_file" "cloud_init_worker" {
+  count           = var.workers
+  filename        = "${path.module}/cloud-init-worker-${count.index}.yaml"
+  file_permission = "0600"
   content = templatefile("${path.module}/templates/cloud-init-worker.yaml.tpl", {
     k3s_channel = var.k3s_channel
     server_ip   = multipass_instance.server.ipv4
@@ -29,5 +30,5 @@ resource "multipass_instance" "worker" {
   cpus           = var.cpus
   memory         = var.memory
   disk           = var.disk
-  cloudinit_file = local_file.cloud_init_worker[count.index].filename
+  cloudinit_file = local_sensitive_file.cloud_init_worker[count.index].filename
 }
