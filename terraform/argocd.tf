@@ -27,3 +27,16 @@ data "kubernetes_secret_v1" "argocd_admin_password" {
 
   depends_on = [helm_release.argocd]
 }
+
+provider "kubectl" {
+  config_path = local_file.kubeconfig.filename
+}
+
+resource "kubectl_manifest" "bootstrap_app" {
+  yaml_body = templatefile("${path.module}/../gitops/bootstrap/app-of-apps.yaml", {
+    repo_url = var.gitops_repo_url
+    revision = var.gitops_repo_revision
+  })
+
+  depends_on = [helm_release.argocd]
+}
