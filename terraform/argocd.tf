@@ -28,7 +28,7 @@ resource "helm_release" "argocd" {
   namespace        = "argocd"
   create_namespace = true
 
-  depends_on = [local_file.kubeconfig]
+  depends_on = [local_sensitive_file.kubeconfig]
 }
 
 data "kubernetes_secret_v1" "argocd_admin_password" {

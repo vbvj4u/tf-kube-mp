@@ -197,11 +197,22 @@ changes.
 - **Boot/readiness races**: readiness is polled via a sentinel file
   and retry loop (see §5 step 2), not a fixed sleep, since cloud-init
   timing varies by Mac hardware.
-- **Worker join failures**: non-fatal to the rest of the stack (ArgoCD
-  and podinfo only need the server + at least one worker). A failed
-  join surfaces as a missing node in `kubectl get nodes` / the
-  Terraform outputs; recoverable via `terraform taint` + re-apply of
-  that one instance. No automatic retry built in.
+- **Worker/server join failures**: *(corrected post-implementation —
+  empirically, `multipass launch` blocks until cloud-init finishes
+  inside the guest, not just until the VM is "Running," so this is not
+  the silent, Terraform-invisible failure the original draft assumed.)*
+  Each cloud-init template bounds its readiness wait with `timeout`
+  (240s for the systemd unit, 60s for the node-token) and writes
+  `/tmp/k3s-failed` with a reason instead of `/tmp/k3s-ready` on
+  failure, so cloud-init always completes within a bounded time either
+  way. A genuine failure surfaces as `terraform apply` erroring out on
+  that `multipass_instance` resource (Multipass's own launch timeout),
+  not a quietly-missing node — diagnose via
+  `multipass exec <name> -- cat /tmp/k3s-failed` or
+  `multipass exec <name> -- sudo journalctl -u k3s[-agent] --no-pager`.
+  ArgoCD and podinfo only need the server + at least one worker, so a
+  single failed worker doesn't block the rest of the stack; recover via
+  `terraform apply` again once the cause is fixed.
 - **Helm/ArgoCD install failures**: handled by `helm_release`'s
   built-in `timeout` and rollback-on-failure behavior — surfaces as a
   normal Terraform apply error.
@@ -221,7 +232,9 @@ changes.
   the deletes. The Multipass provider's `Delete` calls
   `multipass delete --purge`, so VM disk space is freed immediately
   with no manual `multipass purge` step. The local kubeconfig file is
-  a `local_file` resource, so it's removed from disk on destroy too.
+  a `local_sensitive_file` resource (holds the cluster-admin key, so
+  its content is redacted from plan/apply CLI output, unlike a plain
+  `local_file`), so it's removed from disk on destroy too.
   The GitHub repo and its history are untouched by destroy, by design.
 
 ## 8. Variables / configurability

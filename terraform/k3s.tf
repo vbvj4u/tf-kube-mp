@@ -13,7 +13,7 @@ data "external" "kubeconfig_raw" {
   }
 }
 
-resource "local_file" "kubeconfig" {
+resource "local_sensitive_file" "kubeconfig" {
   filename        = "${path.module}/kubeconfig"
   content         = data.external.kubeconfig_raw.result.content
   file_permission = "0600"

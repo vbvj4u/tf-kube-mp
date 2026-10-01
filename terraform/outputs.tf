@@ -7,7 +7,7 @@ output "worker_ips" {
 }
 
 output "kubeconfig_path" {
-  value = local_file.kubeconfig.filename
+  value = local_sensitive_file.kubeconfig.filename
 }
 
 output "argocd_admin_password" {
