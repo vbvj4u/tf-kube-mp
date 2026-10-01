@@ -13,13 +13,6 @@ then installs ArgoCD, which takes over deploying a sample app
 ends at "cluster exists + ArgoCD is running and pointed at git";
 ArgoCD owns everything deployed to the cluster from that point on.
 
-Inspired by [smiguez85/terraform-kubernetes-multipass](https://github.com/smiguez85/terraform-kubernetes-multipass),
-but intentionally diverges from it where that repo's 2023-era choices
-(Kubernetes 1.28 pinned, Docker + a from-source `cri-dockerd` build, a
-Python `data.external` shim because no real Multipass provider
-existed, SSH-based provisioning, HAProxy for HA) are no longer the
-best available option.
-
 ### Success criteria
 - `terraform apply` in `terraform/` produces a working multi-node
   Kubernetes cluster on Multipass and a running ArgoCD instance,
