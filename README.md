@@ -147,7 +147,13 @@ reconciling toward whatever image tag is committed in git — `abort`
 stops traffic to the canary immediately (useful mid-incident) but
 doesn't survive the next sync unless you also revert the git commit
 that bumped the tag. For a durable rollback, revert the commit and
-push.
+push — **then promote again.** A git revert is itself a new image
+change, so the canary strategy re-triggers from scratch on the way
+back down too: it steps to `setWeight: 33` and pauses indefinitely,
+just like a forward bump. The revert alone leaves you at a 2-old/1-new
+split, not back at 3/3 — run `kubectl argo rollouts promote podinfo -n
+podinfo` once more to actually finish returning to the reverted
+version.
 
 ## Teardown
 
