@@ -125,14 +125,20 @@ To run a canary:
    commit, push.
 2. Watch it reach the paused canary split:
    ```bash
-   KUBECONFIG=terraform/kubeconfig kubectl argo-rollouts get rollout podinfo -n podinfo --watch
+   KUBECONFIG=terraform/kubeconfig kubectl argo rollouts get rollout podinfo -n podinfo --watch
    ```
 3. Promote (finish the rollout) or abort (stop sending traffic to the
    canary):
    ```bash
-   KUBECONFIG=terraform/kubeconfig kubectl argo-rollouts promote podinfo -n podinfo
-   KUBECONFIG=terraform/kubeconfig kubectl argo-rollouts abort podinfo -n podinfo
+   KUBECONFIG=terraform/kubeconfig kubectl argo rollouts promote podinfo -n podinfo
+   KUBECONFIG=terraform/kubeconfig kubectl argo rollouts abort podinfo -n podinfo
    ```
+
+   (Note the space, not a hyphen, between `argo` and `rollouts` —
+   on at least kubectl v1.37.0, `kubectl argo-rollouts ...` (as
+   upstream's own docs show it) fails with `unknown command
+   "argo-rollouts" for "kubectl"`; kubectl's plugin dispatch resolves
+   the `kubectl-argo-rollouts` binary via the two-word form instead.)
 
 **`abort` is transient, not a GitOps rollback.** It only patches the
 live Rollout's `status`, not the manifest in git. Since podinfo's
