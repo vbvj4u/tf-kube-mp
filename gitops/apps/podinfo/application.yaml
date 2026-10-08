@@ -5,16 +5,10 @@ metadata:
   namespace: argocd
 spec:
   project: default
-  sources:
-    - repoURL: https://stefanprodan.github.io/podinfo
-      chart: podinfo
-      targetRevision: ">=6.0.0"
-      helm:
-        valueFiles:
-          - $values/gitops/apps/podinfo/values.yaml
-    - repoURL: https://github.com/vbvj4u/tf-kube-mp.git
-      targetRevision: main
-      ref: values
+  source:
+    repoURL: https://github.com/vbvj4u/tf-kube-mp.git
+    targetRevision: main
+    path: gitops/manifests/podinfo
   destination:
     server: https://kubernetes.default.svc
     namespace: podinfo
