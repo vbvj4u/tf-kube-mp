@@ -97,8 +97,51 @@ from `terraform output -raw argocd_admin_password`.
   `terraform apply -parallelism=1`.
 - **`podinfo` Application stuck `OutOfSync`/`Degraded`**: check
   `kubectl get application podinfo -n argocd -o yaml` for
-  `status.conditions` — most likely a `values.yaml` key the podinfo
-  chart doesn't recognize.
+  `status.conditions`. On a from-scratch apply this is usually the
+  `argo-rollouts` Application not having synced yet (so the `Rollout`
+  CRD doesn't exist) — it resolves itself once `argo-rollouts` finishes
+  syncing. Otherwise, check for a YAML syntax error in
+  `gitops/manifests/podinfo/*.yaml`.
+- **`argo-rollouts` Application stuck `OutOfSync`/`Degraded`**: check
+  `kubectl get application argo-rollouts -n argocd -o yaml` for
+  `status.conditions`.
+
+## Canary deployments
+
+Podinfo is managed by an [Argo Rollouts](https://argo-rollouts.readthedocs.io/)
+`Rollout` instead of a plain `Deployment`. Its canary strategy steps to
+`setWeight: 33` — 2 stable pods / 1 canary pod behind the same NodePort
+Service — then pauses indefinitely.
+
+Install the CLI plugin once:
+
+```bash
+brew install argoproj/tap/kubectl-argo-rollouts
+```
+
+To run a canary:
+
+1. Bump the image tag in `gitops/manifests/podinfo/rollout.yaml`,
+   commit, push.
+2. Watch it reach the paused canary split:
+   ```bash
+   KUBECONFIG=terraform/kubeconfig kubectl argo-rollouts get rollout podinfo -n podinfo --watch
+   ```
+3. Promote (finish the rollout) or abort (stop sending traffic to the
+   canary):
+   ```bash
+   KUBECONFIG=terraform/kubeconfig kubectl argo-rollouts promote podinfo -n podinfo
+   KUBECONFIG=terraform/kubeconfig kubectl argo-rollouts abort podinfo -n podinfo
+   ```
+
+**`abort` is transient, not a GitOps rollback.** It only patches the
+live Rollout's `status`, not the manifest in git. Since podinfo's
+Application has `syncPolicy.automated.selfHeal: true`, ArgoCD keeps
+reconciling toward whatever image tag is committed in git — `abort`
+stops traffic to the canary immediately (useful mid-incident) but
+doesn't survive the next sync unless you also revert the git commit
+that bumped the tag. For a durable rollback, revert the commit and
+push.
 
 ## Teardown
 
