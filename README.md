@@ -42,9 +42,11 @@ terraform output -raw argocd_admin_password
 KUBECONFIG=kubeconfig kubectl get nodes
 ```
 
-To change what's deployed, edit files under `gitops/apps/`, commit, and
-push — no `terraform apply` needed. Only changes to `terraform/` itself
-(cluster size, VM resources, ArgoCD version) need a re-apply.
+To change what's deployed, edit files under `gitops/apps/` (Application
+definitions) or `gitops/manifests/` (the actual workload YAML, e.g.
+podinfo's image tag in `gitops/manifests/podinfo/rollout.yaml`), commit,
+and push — no `terraform apply` needed. Only changes to `terraform/`
+itself (cluster size, VM resources, ArgoCD version) need a re-apply.
 
 ### Accessing the ArgoCD UI
 
@@ -95,13 +97,24 @@ from `terraform output -raw argocd_admin_password`.
   happen if a previous apply was interrupted mid-launch): remove it by
   hand with `multipass delete --purge <name>`, then re-run
   `terraform apply -parallelism=1`.
-- **`podinfo` Application stuck `OutOfSync`/`Degraded`**: check
-  `kubectl get application podinfo -n argocd -o yaml` for
-  `status.conditions`. On a from-scratch apply this is usually the
-  `argo-rollouts` Application not having synced yet (so the `Rollout`
-  CRD doesn't exist) — it resolves itself once `argo-rollouts` finishes
-  syncing. Otherwise, check for a YAML syntax error in
-  `gitops/manifests/podinfo/*.yaml`.
+- **`podinfo` Application not `Healthy`** (sync status may still say
+  `Synced`): run `kubectl argo rollouts get rollout podinfo -n podinfo`
+  before assuming something's broken — it names the real cause:
+  - **`Paused` / `CanaryPauseStep`** — expected, not a fault. A canary
+    is mid-rollout, holding at the `setWeight: 33` split until you
+    `promote` or `abort` it (see Canary deployments below).
+    `podinfo`'s Application shows not-`Healthy` for the whole duration
+    of a deliberate pause.
+  - **`Degraded` / `RolloutAborted`, with sync status `Synced`** —
+    someone ran `abort`. This can persist indefinitely: `abort` only
+    changes live status, so git and the cluster disagree and ArgoCD
+    has no drift to resync. See the `abort` caveat below.
+  - **Neither of the above, and genuinely `OutOfSync`/`Degraded`**: on
+    a from-scratch apply this is usually the `argo-rollouts`
+    Application not having synced yet (so the `Rollout` CRD doesn't
+    exist) — it resolves itself once `argo-rollouts` finishes syncing.
+    Otherwise, check for a YAML syntax error in
+    `gitops/manifests/podinfo/*.yaml`.
 - **`argo-rollouts` Application stuck `OutOfSync`/`Degraded`**: check
   `kubectl get application argo-rollouts -n argocd -o yaml` for
   `status.conditions`.
@@ -140,20 +153,27 @@ To run a canary:
    "argo-rollouts" for "kubectl"`; kubectl's plugin dispatch resolves
    the `kubectl-argo-rollouts` binary via the two-word form instead.)
 
-**`abort` is transient, not a GitOps rollback.** It only patches the
-live Rollout's `status`, not the manifest in git. Since podinfo's
-Application has `syncPolicy.automated.selfHeal: true`, ArgoCD keeps
-reconciling toward whatever image tag is committed in git — `abort`
-stops traffic to the canary immediately (useful mid-incident) but
-doesn't survive the next sync unless you also revert the git commit
-that bumped the tag. For a durable rollback, revert the commit and
-push — **then promote again.** A git revert is itself a new image
-change, so the canary strategy re-triggers from scratch on the way
-back down too: it steps to `setWeight: 33` and pauses indefinitely,
-just like a forward bump. The revert alone leaves you at a 2-old/1-new
-split, not back at 3/3 — run `kubectl argo rollouts promote podinfo -n
-podinfo` once more to actually finish returning to the reverted
-version.
+**`abort` is transient and can leave git and the cluster silently
+disagreeing.** It only patches the live Rollout's `status`, not the
+manifest in git, so the pods return to the stable version immediately
+— good for stopping traffic to a bad canary mid-incident. But because
+`.spec` never changed, ArgoCD still reports the Application `Synced`
+(there's no drift for `selfHeal` to detect) even though git still
+names the bumped tag. Nothing re-reconciles on its own, and the
+disagreement is invisible to a quick "is everything green?" check —
+the next unrelated change to `rollout.yaml` will roll straight forward
+to the version you just aborted. For a durable rollback, revert the
+commit and push instead, so git tells the truth.
+
+A git revert is itself a new image change, so the canary strategy
+re-triggers from scratch on the way back down too: it steps to
+`setWeight: 33` and pauses indefinitely, just like a forward bump —
+*unless* the live pods already matched the reverted version (e.g.
+right after an `abort`), in which case there's nothing to transition
+and it resolves straight to `Healthy`. If `kubectl argo rollouts get
+rollout podinfo -n podinfo` still shows `Paused` after the revert
+syncs, run `kubectl argo rollouts promote podinfo -n podinfo` once
+more to finish returning to the reverted version.
 
 ## Teardown
 
